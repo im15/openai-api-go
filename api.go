@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -74,8 +75,11 @@ func (c *Client) newRequest(ctx context.Context,
 	method string,
 	url string,
 	body any) (req *http.Request, err error) {
-	var data io.Reader
-	var contentType = "application/json; charset=utf-8"
+	var (
+		data              io.Reader
+		headerAccept      = "application/json; charset=utf-8"
+		headerContentType = "application/json; charset=utf-8"
+	)
 
 	if body != nil {
 		var buf bytes.Buffer
@@ -84,13 +88,13 @@ func (c *Client) newRequest(ctx context.Context,
 			if err = b.WriteForm(w); err != nil {
 				return
 			}
-			contentType = w.FormDataContentType()
+			headerContentType = w.FormDataContentType()
 		} else if b, ok := body.(ImageVariationRequestBody); ok {
 			w := multipart.NewWriter(&buf)
 			if err = b.WriteForm(w); err != nil {
 				return
 			}
-			contentType = w.FormDataContentType()
+			headerContentType = w.FormDataContentType()
 		} else {
 			if err = json.NewEncoder(&buf).Encode(body); err != nil {
 				return
@@ -102,13 +106,19 @@ func (c *Client) newRequest(ctx context.Context,
 	if req, err = http.NewRequestWithContext(ctx, method, url, data); err != nil {
 		return
 	}
-
-	req.Header.Set("Accept", "application/json; charset=utf-8")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
-	req.Header.Set("Content-Type", contentType)
+	if b, ok := body.(ChatRequestBody); ok {
+		if b.Stream {
+			headerAccept = "text/event-stream"
+			req.Header.Set("Cache-Control", "no-cache")
+			req.Header.Set("Connection", "keep-alive")
+		}
+	}
 	if c.OrgID != "" {
 		req.Header.Set("OpenAI-Organization", c.OrgID)
 	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.token))
+	req.Header.Set("Accept", headerAccept)
+	req.Header.Set("Content-Type", headerContentType)
 
 	return
 }
@@ -132,9 +142,19 @@ func (c *Client) getRequest(req *http.Request, v any) error {
 	}
 
 	if v != nil {
-		if b, ok := v.(RetrieveFileContentResponseBody); ok {
+		if b, ok := v.(*RetrieveFileContentResponseBody); ok {
 			b.Data, err = io.ReadAll(res.Body)
 			return err
+		}
+		if _, ok := v.(*ChatResponseBody); ok {
+			if res.Header.Get("Content-Type") == "text/event-stream" {
+				scanner := bufio.NewScanner(res.Body)
+				for scanner.Scan() {
+					line := scanner.Text()
+					log.Printf("line: %s", line)
+				}
+				return nil
+			}
 		}
 		return json.NewDecoder(res.Body).Decode(v)
 	}

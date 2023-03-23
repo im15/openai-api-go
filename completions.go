@@ -39,18 +39,19 @@ type CompletionResponseBody struct {
 	Usage   TokensUsage        `json:"usage"`
 }
 
+// CreateCompletions
+// POST https://api.openai.com/v1/completions
 func (c *Client) CreateCompletions(
 	ctx context.Context,
 	reqBody CompletionRequestBody) (resBody CompletionResponseBody, err error) {
-	const apiURL = "https://api.openai.com/v1/completions"
+	const apiURL = apiURLPrefix + "/v1/completions"
 
 	var req *http.Request
-	if req, err = c.newRequest(ctx, POST, apiURL, reqBody); err != nil {
+	if req, err = c.newRequest(ctx, http.MethodPost, apiURL, reqBody); err != nil {
 		return
 	}
 
-	if err = c.getRequest(req, resBody); err != nil {
-		return
-	}
+	err = c.getRequest(req, resBody)
+
 	return
 }

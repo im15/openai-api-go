@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 )
 
@@ -62,9 +63,10 @@ type ModelsResponseBody struct {
 
 // ListModels Lists the currently available models, and provides basic information about each
 // one such as the owner and availability.
+// GET https://api.openai.com/v1/models
 func (c *Client) ListModels(ctx context.Context) (*ModelsResponseBody, error) {
-	const apiUrlV1 = "https://api.openai.com/v1/models"
-	req, err := c.newRequest(ctx, GET, apiUrlV1, nil)
+	const apiURL = apiURLPrefix + "/v1/models"
+	req, err := c.newRequest(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -78,16 +80,17 @@ func (c *Client) ListModels(ctx context.Context) (*ModelsResponseBody, error) {
 // RetrieveModel Retrieves a model instance, providing basic information about the model
 // such as the owner and permissioning.
 // `model`: The ID of the model to use for this request
-func (c *Client) RetrieveModel(ctx context.Context, model string) (modelObject *ModelObject, err error) {
-	const apiURLv1 = "https://api.openai.com/v1/models/"
+// GET https://api.openai.com/v1/models/{model}
+func (c *Client) RetrieveModel(
+	ctx context.Context,
+	model string,
+) (modelObject ModelObject, err error) {
+	var apiURL = fmt.Sprintf("%s/v1/models/%s", apiURLPrefix, model)
 	var req *http.Request
-	if req, err = c.newRequest(ctx, GET, apiURLv1+model, nil); err != nil {
-		return nil, err
+	if req, err = c.newRequest(ctx, http.MethodGet, apiURL, nil); err != nil {
+		return
 	}
 
-	var data ModelObject
-	if err = c.getRequest(req, &data); err != nil {
-		return nil, err
-	}
-	return &data, nil
+	err = c.getRequest(req, &modelObject)
+	return
 }

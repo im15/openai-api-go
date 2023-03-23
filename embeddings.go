@@ -1,5 +1,10 @@
 package openai
 
+import (
+	"context"
+	"net/http"
+)
+
 type EmbeddingsRequestBody struct {
 	Model string `json:"model"`
 	Input string `json:"input"`
@@ -16,6 +21,16 @@ type EmbeddingsResponseBody struct {
 	} `json:"data"`
 }
 
-func (c *Client) CreateEmbeddings() {
-	// POST https://api.openai.com/v1/embeddings
+// CreateEmbeddings
+// POST https://api.openai.com/v1/embeddings
+func (c *Client) CreateEmbeddings(
+	ctx context.Context,
+	reqBody EmbeddingsRequestBody) (resBody EmbeddingsResponseBody, err error) {
+	const apiURL = apiURLPrefix + "/v1/embeddings"
+	var req *http.Request
+	if req, err = c.newRequest(ctx, http.MethodPost, apiURL, reqBody); err != nil {
+		return
+	}
+	err = c.getRequest(req, &resBody)
+	return
 }

@@ -1,6 +1,9 @@
 package openai
 
-import "context"
+import (
+	"context"
+	"net/http"
+)
 
 const (
 	RoleUser      = "user"
@@ -14,10 +17,18 @@ type ChatMessage struct {
 }
 
 type ChatRequestBody struct {
-	Model    string        `json:"model"`
-	Messages []ChatMessage `json:"messages"`
-	//LogitBias
-	User string `json:"user,omitempty"`
+	Model            string         `json:"model"`
+	Messages         []ChatMessage  `json:"messages"`
+	Temperature      float32        `json:"temperature,omitempty"`
+	TopP             float32        `json:"top_p,omitempty"`
+	N                int            `json:"n,omitempty"`
+	Stream           bool           `json:"stream,omitempty"`
+	Stop             string         `json:"stop,omitempty"`
+	MaxTokens        int            `json:"max_tokens,omitempty"`
+	PresencePenalty  float32        `json:"presence_penalty,omitempty"`
+	FrequencyPenalty float32        `json:"frequency_penalty,omitempty"`
+	LogitBias        map[string]int `json:"logit_bias,omitempty"`
+	User             string         `json:"user,omitempty"`
 }
 
 type ChatChoice struct {
@@ -35,23 +46,23 @@ type ChatResponseBody struct {
 }
 
 // CreateChatCompletion Create a completion for the chat message
-func (c *Client) CreateChatCompletion(ctx context.Context, body ChatRequestBody) (*ChatResponseBody, error) {
-	//const apiUrlV1 = "https://api.openai.com/v1/chat/completions"
-	const apiUrlV1 = "http://localhost:8080/v1/chat/completions"
-	switch body.Model {
+// POST https://api.openai.com/v1/chat/completions
+func (c *Client) CreateChatCompletion(
+	ctx context.Context,
+	reqBody ChatRequestBody) (resBody ChatResponseBody, err error) {
+	switch reqBody.Model {
 	case GPT4, GPT40314, GPT432k, GPT432k0314, GPT35Turbo, GPT35Turbo0310:
 	default:
-		return nil, ErrInvalidModel
+		err = ErrInvalidModel
+		return
 	}
 
-	req, err := c.newRequest(ctx, POST, apiUrlV1, body)
-	if err != nil {
-		return nil, err
+	const apiURL = apiURLPrefix + "/v1/chat/completions"
+	var req *http.Request
+	if req, err = c.newRequest(ctx, http.MethodPost, apiURL, reqBody); err != nil {
+		return
 	}
 
-	var resBody ChatResponseBody
-	if err := c.getRequest(req, &resBody); err != nil {
-		return nil, err
-	}
-	return &resBody, nil
+	err = c.getRequest(req, &resBody)
+	return
 }

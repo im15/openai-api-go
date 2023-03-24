@@ -128,7 +128,12 @@ func (c *Client) getRequest(req *http.Request, v any) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = res.Body.Close() }()
+	var wasStreamResponse bool
+	defer func() {
+		if !wasStreamResponse {
+			_ = res.Body.Close()
+		}
+	}()
 
 	if res.StatusCode < http.StatusOK || res.StatusCode >= http.StatusBadRequest {
 		body, err := io.ReadAll(res.Body)
@@ -146,12 +151,41 @@ func (c *Client) getRequest(req *http.Request, v any) error {
 			b.Data, err = io.ReadAll(res.Body)
 			return err
 		}
-		if _, ok := v.(*ChatResponseBody); ok {
+		if b, ok := v.(*ChatResponseBody); ok {
 			if res.Header.Get("Content-Type") == "text/event-stream" {
-				scanner := bufio.NewScanner(res.Body)
-				for scanner.Scan() {
-					line := scanner.Text()
-					log.Printf("line: %s", line)
+				if b.StreamChan != nil {
+					wasStreamResponse = true
+
+					go func(b *ChatResponseBody, r io.ReadCloser) {
+						defer func() {
+							_ = r.Close()
+							//log.Printf("r.Closed")
+						}()
+						//body.StreamChan = make(chan *ChatStreamChunk, 128)
+						const dataField = "data: "
+						scanner := bufio.NewScanner(r)
+						for scanner.Scan() {
+							line := scanner.Bytes()
+							if bytes.HasPrefix(line, []byte(dataField)) {
+								line = bytes.TrimPrefix(line, []byte(dataField))
+								if bytes.Equal(line, []byte("[DONE]")) {
+									//log.Printf("close: DONE")
+									close(b.StreamChan)
+									break
+								}
+								var chunk ChatStreamChunk
+								if err = json.Unmarshal(line, &chunk); err != nil {
+									//
+									log.Printf("unmarshal error: %v", err)
+								} else {
+									b.StreamChan <- &chunk
+								}
+								//log.Printf("data: [%s]", line)
+							} else {
+								//log.Printf("line: [%s]", line)
+							}
+						}
+					}(b, res.Body)
 				}
 				return nil
 			}

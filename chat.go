@@ -13,12 +13,12 @@ const (
 
 type ChatMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content string `json:"content,omitempty"`
 }
 
 type ChatRequestBody struct {
 	Model            string         `json:"model"`
-	Messages         []ChatMessage  `json:"messages"`
+	Messages         []*ChatMessage `json:"messages"`
 	Temperature      float32        `json:"temperature,omitempty"`
 	TopP             float32        `json:"top_p,omitempty"`
 	N                int            `json:"n,omitempty"`
@@ -32,37 +32,50 @@ type ChatRequestBody struct {
 }
 
 type ChatChoice struct {
-	Index        int         `json:"index"`
-	Message      ChatMessage `json:"message"`
-	FinishReason string      `json:"finish_reason"`
+	Index        int          `json:"index"`
+	Message      *ChatMessage `json:"message"`
+	Delta        *ChatMessage `json:"delta"`
+	FinishReason *string      `json:"finish_reason"`
+}
+
+type ChatStreamChunk struct {
+	ID      string        `json:"id"`
+	Object  string        `json:"object"`
+	Created int           `json:"created"`
+	Choices []*ChatChoice `json:"choices"`
 }
 
 type ChatResponseBody struct {
-	Usage   TokensUsage  `json:"usage"`
-	ID      string       `json:"id"`
-	Object  string       `json:"object"`
-	Created int          `json:"created"`
-	Choices []ChatChoice `json:"choices"`
+	Usage      TokensUsage   `json:"usage"`
+	ID         string        `json:"id"`
+	Object     string        `json:"object"`
+	Created    int           `json:"created"`
+	Choices    []*ChatChoice `json:"choices"`
+	StreamChan chan *ChatStreamChunk
 }
 
 // CreateChatCompletion Create a completion for the chat message
 // POST https://api.openai.com/v1/chat/completions
 func (c *Client) CreateChatCompletion(
 	ctx context.Context,
-	reqBody ChatRequestBody) (resBody ChatResponseBody, err error) {
-	switch reqBody.Model {
+	body ChatRequestBody) (*ChatResponseBody, error) {
+	switch body.Model {
 	case GPT4, GPT40314, GPT432k, GPT432k0314, GPT35Turbo, GPT35Turbo0310:
 	default:
-		err = ErrInvalidModel
-		return
+		return nil, ErrInvalidModel
 	}
 
 	const apiURL = apiURLPrefix + "/v1/chat/completions"
-	var req *http.Request
-	if req, err = c.newRequest(ctx, http.MethodPost, apiURL, reqBody); err != nil {
-		return
+	req, err := c.newRequest(ctx, http.MethodPost, apiURL, body)
+	if err != nil {
+		return nil, err
 	}
-
-	err = c.getRequest(req, &resBody)
-	return
+	responseBody := &ChatResponseBody{}
+	if body.Stream {
+		responseBody.StreamChan = make(chan *ChatStreamChunk, 128)
+	}
+	if err = c.getRequest(req, responseBody); err != nil {
+		return nil, err
+	}
+	return responseBody, nil
 }

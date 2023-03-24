@@ -5,7 +5,7 @@ This library provider Go clients for OpenAI API.
 Installation
 
 ```shell
-go get github.com/im15/go-openai
+go get github.com/im15/openai-api-go
 ```
 
 ## Example:
@@ -15,7 +15,7 @@ package main
 
 import (
 	"context"
-	openai "github.com/im15/openai-api-go"
+	"github.com/im15/openai-api-go"
 	"log"
 	"os"
 )
@@ -26,10 +26,10 @@ func main() {
 		context.Background(),
 		openai.ChatRequestBody{
 			Model: openai.GPT35Turbo,
-			Message: []openai.ChatMessage{
+			Message: []*openai.ChatMessage{
 				{
 					Role: openai.RoleUser, 
-					Content: "Hello!" 
+					Content: "Hello!",
 				},
             },
         },
